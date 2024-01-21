@@ -1,3 +1,4 @@
+import random
 from itertools import product
 
 import numpy as np
@@ -18,7 +19,7 @@ def random_state(n):
     current_matrix = real_current_matrix + 1j * imaginary_current_matrix
 
     state = current_matrix * np.transpose(np.conj(current_matrix))
-    return np.array(state / (100 * state.trace()))
+    return np.array(state / state.trace())
 
 
 def generate_measure_init(untrusted_part, setting_num):
@@ -198,18 +199,21 @@ def sdp_rho_func(prob, index, sdp_part_list, sdp_type_mark_list, part_index, rho
         current_part_index = (start_part_index_list[i] + part_index) % 2
         if len(sdp_type_mark_list[i]) == 1:
             if part_index == 0:
-                rho = picos_generate_rho(prob, sdp_type_mark_list[i][current_part_index], index, i, sdp_part_list, current_part_index)
+                rho = picos_generate_rho(prob, sdp_type_mark_list[i][current_part_index], index, i, sdp_part_list,
+                                         current_part_index)
                 rho_next_list.append(rho)
                 new_rho_raw_list.append(rho)
             else:
                 if len(rho_raw_list) == 0:
                     rho_next_list.append(
-                        numpy_generate_rho(sdp_type_mark_list[i][current_part_index], i, sdp_part_list, current_part_index))
+                        numpy_generate_rho(sdp_type_mark_list[i][current_part_index], i, sdp_part_list,
+                                           current_part_index))
                 else:
                     rho_next_list.append(rho_raw_list[rho_raw_index])
                     rho_raw_index += 1
         else:
-            rho = picos_generate_rho(prob, sdp_type_mark_list[i][current_part_index], index, i, sdp_part_list, current_part_index)
+            rho = picos_generate_rho(prob, sdp_type_mark_list[i][current_part_index], index, i, sdp_part_list,
+                                     current_part_index)
             # exchange part
             if len(rho_raw_list) == 0:
                 if current_part_index == 0:
@@ -255,10 +259,12 @@ def sdp_measure(rho, n_qubit, measure_vec_list, untrusted_part, sdp_part_list, s
     for i in range(len(rho_right_list[0]) ** len(rho_right_list)):
         if len(rho_raw_list) == 0:
             rho_next_list, rho_list = sdp_rho_func(prob, i, sdp_part_list, sdp_type_mark_list, part_index,
-                                                   list(), exchange_matrix_step_list, all_exchange_matrix_list, start_part_index_list)
+                                                   list(), exchange_matrix_step_list, all_exchange_matrix_list,
+                                                   start_part_index_list)
         else:
             rho_next_list, rho_list = sdp_rho_func(prob, i, sdp_part_list, sdp_type_mark_list, part_index,
-                                                   rho_raw_list[i], exchange_matrix_step_list, all_exchange_matrix_list, start_part_index_list)
+                                                   rho_raw_list[i], exchange_matrix_step_list, all_exchange_matrix_list,
+                                                   start_part_index_list)
         rho_sdp_list.append(rho_next_list)
         new_rho_raw_list.append(rho_list)
 
@@ -274,6 +280,8 @@ def sdp_measure(rho, n_qubit, measure_vec_list, untrusted_part, sdp_part_list, s
                         rho_next = rho_sdp_list[i][0]
                     else:
                         rho_next += rho_sdp_list[i][0]
+                    for rho_sdp_index in range(1, len(rho_sdp_list[i])):
+                        rho_next += rho_sdp_list[i][rho_sdp_index]
             index2 += 1
             prob.add_constraint(rho_next == rho_right)
         index1 += 1
@@ -299,6 +307,58 @@ def get_combinations(lst):
         return lst
 
 
+def handle_result(vec_list, need_seesaw, rho, n_qubit, untrusted_part, sdp_part_list, sdp_type_mark_list,
+                  exchange_matrix_step_list, all_exchange_matrix_list, start_part_index_list):
+    rho_raw_list = list()
+    if need_seesaw:
+        for i in range(10):
+            result, rho_raw_list = sdp_measure(rho, n_qubit, vec_list, untrusted_part, sdp_part_list,
+                                               sdp_type_mark_list, i % 2, rho_raw_list, exchange_matrix_step_list,
+                                               all_exchange_matrix_list, start_part_index_list)
+    else:
+        result, rho_raw_list = sdp_measure(rho, n_qubit, vec_list, untrusted_part, sdp_part_list,
+                                           sdp_type_mark_list, 0, rho_raw_list, exchange_matrix_step_list,
+                                           all_exchange_matrix_list, start_part_index_list)
+    return result
+
+
+def opti_process(untrusted_part, setting_num, candidate_measure_vec, selected_elements, need_seesaw, rho, n_qubit,
+                 sdp_part_list,
+                 sdp_type_mark_list, exchange_matrix_step_list, all_exchange_matrix_list,
+                 start_part_index_list):
+    best_result = 3
+    best_select_elements = list()
+    for part_index in range(len(untrusted_part)):
+        current_part_selected_list = list()
+        for setting_index in range(setting_num):
+            current_best_vec = None
+            current_best_result = 2
+            for vec in candidate_measure_vec[part_index][setting_index]:
+                if setting_index == setting_num - 1:
+                    current_part_vec = current_part_selected_list + [vec]
+                else:
+                    current_part_vec = current_part_selected_list + [vec] + selected_elements[part_index][
+                                                                            setting_index + 1:]
+                if part_index == len(untrusted_part) - 1:
+                    current_vec_list = best_select_elements[0:part_index] + [current_part_vec]
+                else:
+                    current_vec_list = best_select_elements[0:part_index] + [current_part_vec] + selected_elements[
+                                                                                                 part_index + 1:]
+
+                result = handle_result(current_vec_list, need_seesaw, rho, n_qubit, untrusted_part, sdp_part_list,
+                                       sdp_type_mark_list, exchange_matrix_step_list, all_exchange_matrix_list,
+                                       start_part_index_list)
+                if result < current_best_result:
+                    print("part_index:", part_index, "setting_index:", setting_index, "result:", result, vec)
+                    current_best_result = result
+                    current_best_vec = vec
+                    if current_best_result < best_result:
+                        best_result = current_best_result
+            current_part_selected_list.append(current_best_vec)
+        best_select_elements.append(current_part_selected_list)
+    return best_select_elements, best_result
+
+
 def train(rho, n_qubit, measure_vec_list, setting_num, untrusted_part, best_result, angle, sdp_part_list):
     candidate_measure_vec = list()
     for part_index in range(len(untrusted_part)):
@@ -309,15 +369,13 @@ def train(rho, n_qubit, measure_vec_list, setting_num, untrusted_part, best_resu
             candidate_part_measure_vec.append(current_measure_vec_list)
         candidate_measure_vec.append(candidate_part_measure_vec)
 
-    combinations = get_combinations(candidate_measure_vec)
-    vec_combi_result = list(product(*[product(*x) for x in combinations]))
-
     need_seesaw = False
     sdp_type_mark_list = list()
     exchange_matrix_step_list = list()
     all_exchange_matrix_list = generate_all_exchange_matrix(n_qubit - len(untrusted_part))
     start_part_index_list = list()
 
+    # for seesaw
     for sdp_part_item in sdp_part_list:
         type_mark_item = list()
         concatenated_list = list()
@@ -347,20 +405,26 @@ def train(rho, n_qubit, measure_vec_list, setting_num, untrusted_part, best_resu
 
     best_measure_vec_list = measure_vec_list
 
-    for vec_list in vec_combi_result:
-        rho_raw_list = list()
-        if need_seesaw:
-            for i in range(10):
-                result, rho_raw_list = sdp_measure(rho, n_qubit, vec_list, untrusted_part, sdp_part_list,
-                                                   sdp_type_mark_list, i % 2, rho_raw_list, exchange_matrix_step_list,
-                                                   all_exchange_matrix_list, start_part_index_list)
-        else:
-            result, rho_raw_list = sdp_measure(rho, n_qubit, vec_list, untrusted_part, sdp_part_list,
-                                               sdp_type_mark_list, 0, rho_raw_list, exchange_matrix_step_list,
-                                               all_exchange_matrix_list, start_part_index_list)
-        if result < best_result:
-            print("result:", result, vec_list)
-            best_result = result
-            best_measure_vec_list = vec_list
+    print(best_measure_vec_list)
+    best_select_elements, current_best_result = opti_process(untrusted_part, setting_num, candidate_measure_vec,
+                                                             best_measure_vec_list,
+                                                             need_seesaw, rho, n_qubit, sdp_part_list,
+                                                             sdp_type_mark_list,
+                                                             exchange_matrix_step_list, all_exchange_matrix_list,
+                                                             start_part_index_list)
 
-    return best_measure_vec_list, best_result
+    print("first:", best_select_elements)
+    if current_best_result < best_result:
+        best_result = current_best_result
+
+    best_select_elements, current_best_result = opti_process(untrusted_part, setting_num, candidate_measure_vec,
+                                                             best_select_elements,
+                                                             need_seesaw, rho, n_qubit, sdp_part_list,
+                                                             sdp_type_mark_list,
+                                                             exchange_matrix_step_list, all_exchange_matrix_list,
+                                                             start_part_index_list)
+    print("second:", best_select_elements)
+    if current_best_result < best_result:
+        best_result = current_best_result
+
+    return best_select_elements, best_result
