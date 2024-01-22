@@ -209,7 +209,7 @@ def sdp_rho_func(prob, index, sdp_part_list, sdp_type_mark_list, part_index, rho
                         numpy_generate_rho(sdp_type_mark_list[i][current_part_index], i, sdp_part_list,
                                            current_part_index))
                 else:
-                    rho_next_list.append(rho_raw_list[rho_raw_index])
+                    rho_next_list.append(pic.Constant(rho_raw_list[rho_raw_index]))
                     rho_raw_index += 1
         else:
             rho = picos_generate_rho(prob, sdp_type_mark_list[i][current_part_index], index, i, sdp_part_list,
@@ -289,7 +289,11 @@ def sdp_measure(rho, n_qubit, measure_vec_list, untrusted_part, sdp_part_list, s
     # print(prob)
     prob.set_objective("max", p)
     prob.solve(solver="mosek", primals=True)
-    return p.value, np.array(new_rho_raw_list)
+    print(p.value)
+    np_new_rho_list = list()
+    for rho_list in new_rho_raw_list:
+        np_new_rho_list.append([np.array(item) for item in rho_list])
+    return p.value, np_new_rho_list
 
 
 def get_measure_list(measure_vec):
