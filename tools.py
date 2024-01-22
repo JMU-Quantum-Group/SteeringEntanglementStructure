@@ -1,4 +1,3 @@
-import random
 from itertools import product
 
 import numpy as np
@@ -167,7 +166,7 @@ def picos_generate_rho(prob, type_mark, index, i, sdp_part_list, part_index):
     else:
         rho = pic.HermitianVariable('rho_' + str(index) + '_' + str(i), 4)
         prob.add_constraint(rho.partial_trace([1]) >> 0)
-        prob.add_constraint(rho.partial_transpose([0]) >> 0)
+        # prob.add_constraint(rho.partial_transpose([0]) >> 0)
         prob.add_constraint(rho >> 0)
     return rho
 
@@ -277,11 +276,11 @@ def sdp_measure(rho, n_qubit, measure_vec_list, untrusted_part, sdp_part_list, s
                 number_list = convert_to_base_n(i, len(rho_right_list[0]), len(rho_right_list))
                 if number_list[index1] == index2:
                     if rho_next is None:
-                        rho_next = rho_sdp_list[i][0]
+                        rho_next = rho_sdp_list[i][1]
                     else:
-                        rho_next += rho_sdp_list[i][0]
-                    for rho_sdp_index in range(1, len(rho_sdp_list[i])):
-                        rho_next += rho_sdp_list[i][rho_sdp_index]
+                        rho_next += rho_sdp_list[i][1]
+                    # for rho_sdp_index in range(1, len(rho_sdp_list[i])):
+                    #     rho_next += rho_sdp_list[i][rho_sdp_index]
             index2 += 1
             prob.add_constraint(rho_next == rho_right)
         index1 += 1
@@ -289,10 +288,22 @@ def sdp_measure(rho, n_qubit, measure_vec_list, untrusted_part, sdp_part_list, s
     # print(prob)
     prob.set_objective("max", p)
     prob.solve(solver="mosek", primals=True)
-    print(p.value)
+    # print(p.value)
+
+    # p_value = p.value
+    # the_right = pic.Constant(p_value * rho + (1 - p_value) * np.eye(2 ** n_qubit) / (2 ** n_qubit)).partial_trace(
+    #     untrusted_part)
+    # print(the_right)
+
     np_new_rho_list = list()
+    the_left = np.zeros([2 ** (n_qubit - len(untrusted_part)), 2 ** (n_qubit - len(untrusted_part))],
+                        dtype=np.complex128)
     for rho_list in new_rho_raw_list:
-        np_new_rho_list.append([np.array(item) for item in rho_list])
+        current_np_matrix = [np.array(item) for item in rho_list]
+        np_new_rho_list.append(current_np_matrix)
+        for np_matrix in current_np_matrix:
+            the_left += np_matrix
+    # print(the_left)
     return p.value, np_new_rho_list
 
 
