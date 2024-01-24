@@ -1,7 +1,7 @@
 import numpy as np
 
 from partition_tools import generate_k_producible_partitions
-from tools import train, generate_measure_init, handle_partition_list
+from tools import train, generate_measure_init, handle_partition_list, random_state
 
 if __name__ == "__main__":
     rho = np.zeros((8, 8))
@@ -12,6 +12,8 @@ if __name__ == "__main__":
         for index2 in indices:
             rho[index, index2] = 0.5
 
+    # rho = np.kron(random_state(4), random_state(2))
+
     untrusted_part = [0]  # start from 0
     untrusted_part_for_partition = [part_index + 1 for part_index in untrusted_part]  # start from 1
     setting_number = 3
@@ -20,7 +22,7 @@ if __name__ == "__main__":
 
     # handle partition
     partition_list = generate_k_producible_partitions(3, 2)
-    sdp_part_list = handle_partition_list(partition_list, untrusted_part_for_partition)
+    sdp_part_list = handle_partition_list(partition_list, untrusted_part_for_partition, 5)
 
     best_result = 2
 

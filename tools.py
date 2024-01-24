@@ -66,14 +66,15 @@ def generate_measure_init_by_setting(setting_num):
     return measure_vec_list
 
 
-def handle_partition_list(partition_list, untrusted_part):
+def handle_partition_list(partition_list, untrusted_part, repeated):
     sdp_part_list = list()
-    for partition in partition_list:
-        current_partition_by_set = partition.partition_by_set
-        sdp_part_item = [s - set(untrusted_part) for s in current_partition_by_set]
-        sdp_part_item = list(filter(None, sdp_part_item))
-        sdp_part_item = handle_partition_set(sdp_part_item)
-        sdp_part_list.append(sdp_part_item)
+    for i in range(repeated):
+        for partition in partition_list:
+            current_partition_by_set = partition.partition_by_set
+            sdp_part_item = [s - set(untrusted_part) for s in current_partition_by_set]
+            sdp_part_item = list(filter(None, sdp_part_item))
+            sdp_part_item = handle_partition_set(sdp_part_item)
+            sdp_part_list.append(sdp_part_item)
     return sdp_part_list
 
 
@@ -165,7 +166,11 @@ def picos_generate_rho(prob, type_mark, index, i, sdp_part_list, part_index):
         prob.add_constraint(rho >> 0)
     else:
         rho = pic.HermitianVariable('rho_' + str(index) + '_' + str(i), 4)
-        prob.add_constraint(rho.partial_trace([1]) >> 0)
+        if sdp_part_list[i][part_index][0] == 2:
+            prob.add_constraint(rho.partial_trace([0]) >> 0)
+        else:
+            prob.add_constraint(rho.partial_trace([1]) >> 0)
+        # prob.add_constraint(rho.partial_trace([0]) >> 0)
         # prob.add_constraint(rho.partial_transpose([0]) >> 0)
         prob.add_constraint(rho >> 0)
     return rho
@@ -276,11 +281,11 @@ def sdp_measure(rho, n_qubit, measure_vec_list, untrusted_part, sdp_part_list, s
                 number_list = convert_to_base_n(i, len(rho_right_list[0]), len(rho_right_list))
                 if number_list[index1] == index2:
                     if rho_next is None:
-                        rho_next = rho_sdp_list[i][1]
+                        rho_next = rho_sdp_list[i][0]
                     else:
-                        rho_next += rho_sdp_list[i][1]
-                    # for rho_sdp_index in range(1, len(rho_sdp_list[i])):
-                    #     rho_next += rho_sdp_list[i][rho_sdp_index]
+                        rho_next += rho_sdp_list[i][0]
+                    for rho_sdp_index in range(1, len(rho_sdp_list[i])):
+                        rho_next += rho_sdp_list[i][rho_sdp_index]
             index2 += 1
             prob.add_constraint(rho_next == rho_right)
         index1 += 1
